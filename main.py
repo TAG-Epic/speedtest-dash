@@ -8,9 +8,11 @@ from prometheus_client import make_wsgi_app, Gauge
 from waitress import serve
 from speedtest import Speedtest
 from threading import Thread
-
-upload_monitor = Gauge("speed_upload", "Upload speed", unit="MiB")
-download_monitor = Gauge("speed_download", "Download speed", unit="MiB")
+from time import sleep
+from os import getenv
+upload_monitor = Gauge("speedtest_upload", "Upload speed")
+download_monitor = Gauge("speedtest_download", "Download speed")
+ping_monitor = Gauge("speedtest_ping", "Ping")
 
 app = Flask(__name__)
 app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
@@ -21,14 +23,21 @@ app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
 def monitor():
     s = Speedtest()
     while True:
-        print("Starting speedtest")
-        upload = s.upload()
-        download = s.download()
+        try:
+            print("Taking speedtest...")
+            s.get_servers()
+            ping = s.results.ping
+            upload = s.upload()
+            download = s.download()
 
-        upload_monitor.set(upload)
-        download_monitor.set(download)
-        print("Speedtest completed")
+            upload_monitor.set(upload)
+            download_monitor.set(download)
+            ping_monitor.set(ping)
+            print("Speedtest done!")
+        except:
+            print("Speedtest failed!")
+        sleep(int(getenv("INTERVAL", 60)))
 
 
 Thread(target=monitor).start()
-serve(app, port=5050)
+serve(app, host="0.0.0.0", port=5050)
